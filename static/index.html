@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Log Analyzer Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <!-- ECharts CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+</head>
+<body>
+    <div id="app" class="app-container">
+        <!-- Toast Notifications -->
+        <div id="toast" class="toast hidden"></div>
+
+        <!-- Global Header -->
+        <header class="global-header">
+            <div class="logo-area">
+                <span class="logo-icon">📊</span>
+                <div class="logo-text">
+                    <h1>LogAnalytix</h1>
+                    <p class="subtitle">Dynamic Log Analyzer Dashboard</p>
+                </div>
+            </div>
+            <div id="active-file-indicator" class="file-indicator hidden">
+                <span class="file-icon">📄</span>
+                <span id="active-filename" class="filename-text"></span>
+                <button id="btn-reset-upload" class="btn btn-secondary btn-sm">Upload New</button>
+            </div>
+        </header>
+
+        <!-- Main Workspace -->
+        <main class="workspace">
+            
+            <!-- Page 1: Upload Page -->
+            <section id="page-upload" class="page active">
+                <div class="upload-card">
+                    <div class="upload-icon">📤</div>
+                    <h2>Upload your dataset</h2>
+                    <p class="upload-desc">Supports Excel (.xlsx), CSV, and JSONL formats. Excel workbooks with multiple sheets will be fully imported.</p>
+                    
+                    <div id="drop-zone" class="drop-zone">
+                        <input type="file" id="file-input" accept=".xlsx,.xls,.csv,.jsonl,.json" class="file-input">
+                        <label for="file-input" class="drop-zone-label">
+                            <span class="btn btn-primary">Choose File</span>
+                            <span class="drag-text">or drag and drop here</span>
+                        </label>
+                    </div>
+                    <div id="upload-progress-container" class="progress-container hidden">
+                        <div class="progress-bar-wrapper">
+                            <div id="upload-progress-bar" class="progress-bar"></div>
+                        </div>
+                        <span id="upload-status" class="progress-status">Uploading & parsing dataset...</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Page 2: Column Mapping Page -->
+            <section id="page-mapping" class="page hidden">
+                <div class="card mapping-card">
+                    <div class="card-header">
+                        <h2>Configure Column Mappings</h2>
+                        <p class="card-desc">Our intelligent detector has mapped columns. Verify and adjust dropdowns below before final import.</p>
+                    </div>
+
+                    <div class="mapping-grid">
+                        <!-- Parent sheet mapping group -->
+                        <div class="mapping-group">
+                            <h3>Document / Header Mapping</h3>
+                            <p class="group-desc">Specify columns containing high-level vendor accuracy and identifiers.</p>
+                            
+                            <div class="field-control">
+                                <label for="map-vendor">Vendor Column <span class="required">*</span></label>
+                                <select id="map-vendor" class="form-select" data-required="true"></select>
+                                <span class="help-text">Name of the vendor/supplier. E.g., HEXT_Filter_Ownership, Supplier.</span>
+                            </div>
+                            
+                            <div class="field-control">
+                                <label for="map-accuracy">Document Accuracy Column <span class="required">*</span></label>
+                                <select id="map-accuracy" class="form-select" data-required="true"></select>
+                                <span class="help-text">Accuracy percentage at document level. E.g., HEXT_Accuracy_Percentage.</span>
+                            </div>
+                            
+                            <div class="field-control">
+                                <label for="map-document-id">Document ID Column <span class="required">*</span></label>
+                                <select id="map-document-id" class="form-select" data-required="true"></select>
+                                <span class="help-text">Unique document record identifier. E.g., HEXT_Key_Id, File_ID.</span>
+                            </div>
+
+                            <div class="field-control">
+                                <label for="map-rel-parent">Parent Join Relationship Key <span class="optional">(Optional)</span></label>
+                                <select id="map-rel-parent" class="form-select"></select>
+                                <span class="help-text">Used to link sheets (e.g. HEXT_Key_Id). Keep empty if single sheet.</span>
+                            </div>
+
+                            <div class="field-control">
+                                <label for="map-start-time">Start Time Column <span class="optional">(Optional)</span></label>
+                                <select id="map-start-time" class="form-select"></select>
+                                <span class="help-text">Timestamp representing when processing started. E.g., HEXT_Processing_Start_Time.</span>
+                            </div>
+
+                            <div class="field-control">
+                                <label for="map-end-time">End Time Column <span class="optional">(Optional)</span></label>
+                                <select id="map-end-time" class="form-select"></select>
+                                <span class="help-text">Timestamp representing when processing completed. E.g., HEXT_Processing_End_Time.</span>
+                            </div>
+                        </div>
+
+                        <!-- Child sheet mapping group -->
+                        <div class="mapping-group border-left">
+                            <h3>Column / Details Mapping</h3>
+                            <p class="group-desc">Specify columns for individual fields analyzed within documents (multi-sheet relationship).</p>
+                            
+                            <div class="field-control">
+                                <label for="map-rel-child">Child Join Relationship Key <span class="optional">(Optional)</span></label>
+                                <select id="map-rel-child" class="form-select"></select>
+                                <span class="help-text">Foreign key column in details sheet (e.g. DCMP_Key_Id).</span>
+                            </div>
+
+                            <div class="field-control">
+                                <label for="map-column-name">Column Name Column <span class="optional">(Optional)</span></label>
+                                <select id="map-column-name" class="form-select"></select>
+                                <span class="help-text">Field/Attribute checked in details. E.g., DCMP_Column_Name, Field Name.</span>
+                            </div>
+                            
+                            <div class="field-control">
+                                <label for="map-match-percent">Field Matching Accuracy Column <span class="optional">(Optional)</span></label>
+                                <select id="map-match-percent" class="form-select"></select>
+                                <span class="help-text">Extracted field accuracy. E.g., DCMP_Matching_Percent, Match %.</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mapping-actions">
+                        <button id="btn-confirm-mapping" class="btn btn-primary btn-large">Analyze & Load Dashboard</button>
+                    </div>
+                </div>
+
+                <!-- Sheet Previews section -->
+                <div class="card preview-card margin-top">
+                    <div class="card-header collapsible-trigger" id="preview-header">
+                        <div class="title-with-icon">
+                            <span class="collapse-icon">▼</span>
+                            <h3>Uploaded Sheet Data Preview</h3>
+                        </div>
+                        <span class="preview-note">View first 5 rows to verify headers</span>
+                    </div>
+                    <div id="preview-content" class="preview-content">
+                        <div id="preview-tabs" class="tab-row compact"></div>
+                        <div id="preview-table-container" class="table-responsive"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Page 3: Dashboard Page -->
+            <section id="page-dashboard" class="page hidden">
+                
+                <!-- Overview Stats Row -->
+                <div class="stats-row">
+                    <div class="stat-card">
+                        <div class="stat-icon text-primary">📑</div>
+                        <div class="stat-info">
+                            <span class="stat-label">Total Records</span>
+                            <span id="stat-total" class="stat-value">-</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon text-success">🎯</div>
+                        <div class="stat-info">
+                            <span class="stat-label">Average Accuracy</span>
+                            <span id="stat-avg" class="stat-value">-</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon text-warning">📉</div>
+                        <div class="stat-info">
+                            <span class="stat-label">Minimum Accuracy</span>
+                            <span id="stat-min" class="stat-value">-</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon text-danger">📈</div>
+                        <div class="stat-info">
+                            <span class="stat-label">Maximum Accuracy</span>
+                            <span id="stat-max" class="stat-value">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dashboard Sub-Navigation Tabs -->
+                <div class="dashboard-tabs">
+                    <button class="dash-tab-btn active" data-tab="tab-vendor">Vendor Analysis</button>
+                    <button class="dash-tab-btn" data-tab="tab-column">Column Analysis</button>
+                    <button class="dash-tab-btn" data-tab="tab-time">Time Analysis</button>
+                </div>
+
+                <!-- Tab 1: Vendor Analysis Content -->
+                <div id="tab-vendor" class="tab-content active">
+                    <!-- Chart Section -->
+                    <div class="card chart-card">
+                        <div class="card-header border-none">
+                            <h3>Vendor Count by Accuracy Range</h3>
+                        </div>
+                        <div id="vendor-chart" class="chart-container"></div>
+                    </div>
+
+                    <!-- Range Filters Section directly below chart -->
+                    <div class="filters-card">
+                        <span class="filter-title">Filter list by Accuracy Range:</span>
+                        <div class="filter-toggles-row">
+                            <label class="toggle-control">
+                                <input type="checkbox" class="range-filter" value="0-20" checked>
+                                <span class="toggle-label">0-20</span>
+                            </label>
+                            <label class="toggle-control">
+                                <input type="checkbox" class="range-filter" value="20-40" checked>
+                                <span class="toggle-label">20-40</span>
+                            </label>
+                            <label class="toggle-control">
+                                <input type="checkbox" class="range-filter" value="40-60" checked>
+                                <span class="toggle-label">40-60</span>
+                            </label>
+                            <label class="toggle-control">
+                                <input type="checkbox" class="range-filter" value="60-80" checked>
+                                <span class="toggle-label">60-80</span>
+                            </label>
+                            <label class="toggle-control">
+                                <input type="checkbox" class="range-filter" value="80-100" checked>
+                                <span class="toggle-label">80-100</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Vendor List Section -->
+                    <div class="card list-card">
+                        <div class="card-header">
+                            <div class="flex-row justify-between">
+                                <h3>Vendor Performance Registry</h3>
+                                <div class="search-box">
+                                    <input type="text" id="vendor-search" placeholder="Search vendor name..." class="form-input">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="data-table" id="table-vendors">
+                                <thead>
+                                    <tr>
+                                        <th data-sort="name" style="cursor: pointer;">Vendor Name ↕</th>
+                                        <th data-sort="avg_accuracy" class="text-right" style="cursor: pointer;">Average Accuracy ↕</th>
+                                        <th data-sort="doc_count" class="text-right" style="cursor: pointer;">Document Count ↕</th>
+                                        <th class="text-center">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 2: Column Analysis Content -->
+                <div id="tab-column" class="tab-content hidden">
+                    <div class="card list-card">
+                        <div class="card-header">
+                            <div class="flex-row justify-between">
+                                <div>
+                                    <h3>Extracted Fields & Columns Analysis</h3>
+                                    <p class="card-desc">Performance of extraction accuracy grouped by accuracy ranges.</p>
+                                </div>
+                                <div class="search-box">
+                                    <input type="text" id="column-search" placeholder="Search column..." class="form-input">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="columns-grouped-container" id="columns-grouped-container" style="padding: 20px; display: flex; flex-direction: column; gap: 16px;">
+                            <!-- Grouped buckets will be dynamically rendered here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 3: Time Analysis Content -->
+                <div id="tab-time" class="tab-content hidden">
+                    <!-- Empty State Message -->
+                    <div id="time-analysis-empty" class="card" style="padding: 40px; text-align: center; display: none;">
+                        <span style="font-size: 48px; display: block; margin-bottom: 16px;">⏱️</span>
+                        <h2>Time Analysis Unavailable</h2>
+                        <p class="card-desc" style="max-width: 500px; margin: 8px auto 20px auto;">
+                            To view time-based performance distributions and processing durations, please configure and map the <strong>Start Time</strong> and <strong>End Time</strong> columns in the settings page.
+                        </p>
+                        <button id="btn-go-to-mapping" class="btn btn-primary">Go to Column Mappings</button>
+                    </div>
+
+                    <!-- Main Time Analysis Content Wrapper -->
+                    <div id="time-analysis-content">
+                        <!-- Controls Row: Segment Count Selector & Reference Column Selector -->
+                        <div class="card filters-card" style="margin-bottom: 20px;">
+                            <div class="flex-row justify-between align-center" style="gap: 16px; flex-wrap: wrap; width: 100%;">
+                                <div class="flex-row align-center" style="gap: 8px;">
+                                    <span class="filter-title">Time Segments:</span>
+                                    <select id="time-segment-count" class="form-select" style="width: auto; padding: 6px 12px; height: auto;">
+                                        <option value="2">2 Segments (12h)</option>
+                                        <option value="3">3 Segments (8h)</option>
+                                        <option value="4">4 Segments (6h)</option>
+                                        <option value="6">6 Segments (4h)</option>
+                                        <option value="8" selected>8 Segments (3h)</option>
+                                        <option value="12">12 Segments (2h)</option>
+                                        <option value="24">24 Segments (1h)</option>
+                                    </select>
+                                </div>
+                                <div class="flex-row align-center" style="gap: 8px;">
+                                    <span class="filter-title">Base Categorization On:</span>
+                                    <select id="time-reference-col" class="form-select" style="width: auto; padding: 6px 12px; height: auto;">
+                                        <option value="start_time" selected>Start Time</option>
+                                        <option value="end_time">End Time</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Charts Row: Record Count Distribution & Average Accuracy by Segment -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;" class="time-charts-grid">
+                            <div class="card chart-card" style="margin-bottom: 0;">
+                                <div class="card-header border-none">
+                                    <h3>Volume by Time Segment</h3>
+                                </div>
+                                <div id="time-volume-chart" class="chart-container" style="height: 300px;"></div>
+                            </div>
+                            <div class="card chart-card" style="margin-bottom: 0;">
+                                <div class="card-header border-none">
+                                    <h3>Average Accuracy by Time Segment</h3>
+                                </div>
+                                <div id="time-accuracy-chart" class="chart-container" style="height: 300px;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Duration Metrics Row (shown only if duration data is available) -->
+                        <div id="time-duration-summary-card" class="card" style="margin-bottom: 20px; display: none;">
+                            <div class="card-header">
+                                <h3>Overall Processing Duration Statistics</h3>
+                            </div>
+                            <div class="panel-stats-grid" style="padding: 20px; border-bottom: none; margin-bottom: 0;">
+                                <div class="panel-stat">
+                                    <span class="panel-stat-val text-primary" id="time-dur-avg">-</span>
+                                    <span class="panel-stat-label">Average Duration (s)</span>
+                                </div>
+                                <div class="panel-stat">
+                                    <span class="panel-stat-val" id="time-dur-median">-</span>
+                                    <span class="panel-stat-label">Median Duration (s)</span>
+                                </div>
+                                <div class="panel-stat">
+                                    <span class="panel-stat-val" id="time-dur-min">-</span>
+                                    <span class="panel-stat-label">Minimum Duration (s)</span>
+                                </div>
+                                <div class="panel-stat">
+                                    <span class="panel-stat-val" id="time-dur-max">-</span>
+                                    <span class="panel-stat-label">Maximum Duration (s)</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Time Segment Details List -->
+                        <div class="card list-card">
+                            <div class="card-header">
+                                <h3>Time Segments Registry & Performance</h3>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="data-table" id="table-time-segments">
+                                    <thead>
+                                        <tr>
+                                            <th>Time Segment</th>
+                                            <th class="text-right" style="width: 150px;">Record Count</th>
+                                            <th class="text-right" style="width: 120px;">Percentage</th>
+                                            <th class="text-right" style="width: 150px;">Avg Accuracy</th>
+                                            <th class="text-right duration-header" style="display: none; width: 150px;">Avg Duration</th>
+                                            <th class="text-right duration-header" style="display: none; width: 150px;">Median Duration</th>
+                                            <th class="text-center" style="width: 150px;">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <!-- Dynamic rows -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- View Details Side Panel (slides in from right) -->
+        <aside id="side-panel" class="side-panel hidden">
+            <div class="panel-backdrop" id="panel-backdrop"></div>
+            <div class="panel-content">
+                <header class="panel-header">
+                    <div class="panel-title-area">
+                        <span class="panel-sub">Vendor Drill-Down</span>
+                        <h2 id="panel-vendor-name">Vendor Name</h2>
+                    </div>
+                    <button id="panel-close-btn" class="close-btn">&times;</button>
+                </header>
+
+                <div class="panel-body">
+                    <!-- High-level Vendor Stats -->
+                    <div class="panel-stats-grid">
+                        <div class="panel-stat">
+                            <span class="panel-stat-val" id="panel-doc-count">-</span>
+                            <span class="panel-stat-label">Documents</span>
+                        </div>
+                        <div class="panel-stat">
+                            <span class="panel-stat-val text-success" id="panel-avg-acc">-</span>
+                            <span class="panel-stat-label">Avg Accuracy</span>
+                        </div>
+                        <div class="panel-stat">
+                            <span class="panel-stat-val" id="panel-min-acc">-</span>
+                            <span class="panel-stat-label">Min Accuracy</span>
+                        </div>
+                        <div class="panel-stat">
+                            <span class="panel-stat-val" id="panel-max-acc">-</span>
+                            <span class="panel-stat-label">Max Accuracy</span>
+                        </div>
+                    </div>
+
+                    <!-- Columns Handled Section -->
+                    <section class="panel-section">
+                        <h3>Columns Handled by Vendor</h3>
+                        <p class="section-desc">Extracted fields check and performance stats for this supplier.</p>
+                        <div class="table-responsive">
+                            <table class="compact-table" id="panel-table-handled">
+                                <thead>
+                                    <tr>
+                                        <th>Column</th>
+                                        <th class="text-right">Checks</th>
+                                        <th class="text-right">Avg Match</th>
+                                        <th class="text-right">Fail %</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Handled column rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <!-- Columns where Accuracy < 100% -->
+                    <section class="panel-section">
+                        <h3>Accuracy Failures (<100% Matching)</h3>
+                        <p class="section-desc">Individual fields requiring manual verification.</p>
+                        <div class="table-responsive">
+                            <table class="compact-table text-danger-theme" id="panel-table-errors">
+                                <thead>
+                                    <tr>
+                                        <th>Column</th>
+                                        <th class="text-right">Avg Match</th>
+                                        <th class="text-right">Failures</th>
+                                        <th class="text-right">Fail %</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Error column rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Time Segment Details Side Panel -->
+        <aside id="time-side-panel" class="side-panel hidden">
+            <div class="panel-backdrop" id="time-panel-backdrop"></div>
+            <div class="panel-content">
+                <header class="panel-header">
+                    <div class="panel-title-area">
+                        <span class="panel-sub">Time Segment Drill-Down</span>
+                        <h2 id="time-panel-label">00:00 - 03:59</h2>
+                    </div>
+                    <button id="time-panel-close-btn" class="close-btn">&times;</button>
+                </header>
+
+                <div class="panel-body">
+                    <!-- Segment Stats -->
+                    <div class="panel-stats-grid">
+                        <div class="panel-stat">
+                            <span class="panel-stat-val" id="time-panel-record-count">-</span>
+                            <span class="panel-stat-label">Records</span>
+                        </div>
+                        <div class="panel-stat">
+                            <span class="panel-stat-val text-success" id="time-panel-avg-accuracy">-</span>
+                            <span class="panel-stat-label">Avg Accuracy</span>
+                        </div>
+                    </div>
+
+                    <!-- Accuracy Distribution Section -->
+                    <section class="panel-section">
+                        <h3>Accuracy Distribution</h3>
+                        <p class="section-desc">Count of records in this segment by accuracy ranges.</p>
+                        <div class="table-responsive">
+                            <table class="compact-table" id="time-panel-table-accuracy">
+                                <thead>
+                                    <tr>
+                                        <th>Accuracy Range</th>
+                                        <th class="text-right">Count</th>
+                                        <th class="text-right">Percentage</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Dynamic accuracy rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <!-- Duration Details Section (conditional) -->
+                    <section class="panel-section" id="time-panel-duration-section" style="display: none;">
+                        <h3>Duration Statistics</h3>
+                        <p class="section-desc">Processing time statistics for this segment.</p>
+                        <div class="panel-stats-grid" style="border-bottom: none; padding: 10px 0 20px 0; margin-bottom: 0;">
+                            <div class="panel-stat">
+                                <span class="panel-stat-val text-primary" id="time-panel-dur-avg">-</span>
+                                <span class="panel-stat-label">Avg (s)</span>
+                            </div>
+                            <div class="panel-stat">
+                                <span class="panel-stat-val" id="time-panel-dur-median">-</span>
+                                <span class="panel-stat-label">Median (s)</span>
+                            </div>
+                            <div class="panel-stat">
+                                <span class="panel-stat-val" id="time-panel-dur-min">-</span>
+                                <span class="panel-stat-label">Min (s)</span>
+                            </div>
+                            <div class="panel-stat">
+                                <span class="panel-stat-val" id="time-panel-dur-max">-</span>
+                                <span class="panel-stat-label">Max (s)</span>
+                            </div>
+                        </div>
+
+                        <h3 style="margin-top: 16px;">Duration Distribution</h3>
+                        <p class="section-desc">Count of records in this segment by processing time.</p>
+                        <div class="table-responsive">
+                            <table class="compact-table" id="time-panel-table-duration">
+                                <thead>
+                                    <tr>
+                                        <th>Duration Range</th>
+                                        <th class="text-right">Count</th>
+                                        <th class="text-right">Percentage</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Dynamic duration rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Main JS Application Logic -->
+    <script src="app.js"></script>
+</body>
+</html>
